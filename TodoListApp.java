@@ -14,8 +14,8 @@ public class TodoListApp {
     private JTable table;
     private DefaultTableModel tableModel;
     private JTextField taskField, priorityField, dueDateField, descriptionField;
-    private JComboBox<String> filterDropdown;
-    private JLabel totalTasksLabel, completedTasksLabel, filterLabel;
+    private JComboBox<String> filterDropdown, categoryDropdown;
+    private JLabel totalTasksLabel, completedTasksLabel, filterLabel, categoryLabel;
     private JButton darkModeButton, addButton, deleteButton, completeButton;
     private boolean darkMode = false;
 
@@ -31,18 +31,19 @@ public class TodoListApp {
         frame.setSize(900, 500);
         frame.setLayout(new BorderLayout());
 
-        String[] columnNames = {"ID", "Task", "Priority", "Due Date", "Description", "Status"};
+        String[] columnNames = {"ID", "Task", "Priority", "Due Date", "Description", "Status", "Category"};
         tableModel = new DefaultTableModel(columnNames, 0);
         table = new JTable(tableModel);
         table.setRowHeight(25);
         JScrollPane scrollPane = new JScrollPane(table);
 
-        JPanel inputPanel = new JPanel(new GridLayout(2, 3, 10, 10));
+        JPanel inputPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         inputPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
         taskField = new JTextField();
         priorityField = new JTextField();
         dueDateField = new JTextField();
         descriptionField = new JTextField();
+        categoryDropdown = new JComboBox<>(new String[]{"Work", "Personal"});
 
         inputPanel.add(new JLabel("Task:"));
         inputPanel.add(taskField);
@@ -52,6 +53,8 @@ public class TodoListApp {
         inputPanel.add(dueDateField);
         inputPanel.add(new JLabel("Description:"));
         inputPanel.add(descriptionField);
+        inputPanel.add(new JLabel("Category:"));
+        inputPanel.add(categoryDropdown);
 
         JPanel buttonPanel = new JPanel();
         addButton = new JButton("Add Task");
@@ -68,7 +71,7 @@ public class TodoListApp {
         sidePanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         filterLabel = new JLabel("Filter Tasks:");
-        filterDropdown = new JComboBox<>(new String[]{"All Tasks", "Pending", "Completed", "High Priority"});
+        filterDropdown = new JComboBox<>(new String[]{"All Tasks", "Pending", "Completed", "High Priority", "Work", "Personal"});
         filterDropdown.addActionListener(e -> loadTasksFromDatabase());
         sidePanel.add(filterLabel);
         sidePanel.add(filterDropdown);
@@ -100,8 +103,9 @@ public class TodoListApp {
         String priority = priorityField.getText();
         String dueDate = dueDateField.getText();
         String description = descriptionField.getText();
+        String category = (String) categoryDropdown.getSelectedItem();
 
-        String sql = "INSERT INTO tasks (task, priority, due_date, description, status) VALUES (?, ?, ?, ?, 'Pending')";
+        String sql = "INSERT INTO tasks (task, priority, due_date, description, status, category) VALUES (?, ?, ?, ?, 'Pending', ?)";
 
         try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -109,11 +113,54 @@ public class TodoListApp {
             pstmt.setString(2, priority);
             pstmt.setString(3, dueDate);
             pstmt.setString(4, description);
+            pstmt.setString(5, category);
             pstmt.executeUpdate();
+
             loadTasksFromDatabase();
         } catch (SQLException e) {
             e.printStackTrace();
         }
+    }
+
+    private void loadTasksFromDatabase() {
+        tableModel.setRowCount(0);
+        int totalTasks = 0, completedTasks = 0;
+        String selectedFilter = filterDropdown.getSelectedItem().toString();
+        String sql = "SELECT * FROM tasks";
+        
+        if (selectedFilter.equals("Pending")) {
+            sql += " WHERE status = 'Pending'";
+        } else if (selectedFilter.equals("Completed")) {
+            sql += " WHERE status = 'Completed'";
+        } else if (selectedFilter.equals("High Priority")) {
+            sql += " WHERE priority = 'High'";
+        } else if (selectedFilter.equals("Work") || selectedFilter.equals("Personal")) {
+            sql += " WHERE category = '" + selectedFilter + "'";
+        }
+
+        try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                Object[] row = {
+                        rs.getInt("id"),
+                        rs.getString("task"),
+                        rs.getString("priority"),
+                        rs.getString("due_date"),
+                        rs.getString("description"),
+                        rs.getString("status"),
+                        rs.getString("category")
+                };
+                tableModel.addRow(row);
+                totalTasks++;
+                if (rs.getString("status").equals("Completed")) completedTasks++;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        totalTasksLabel.setText("Total Tasks: " + totalTasks);
+        completedTasksLabel.setText("Completed: " + completedTasks);
     }
 
     private void deleteTaskFromDatabase() {
@@ -158,75 +205,16 @@ public class TodoListApp {
 
     private void toggleDarkMode() {
         darkMode = !darkMode;
-        Color bgColor = darkMode ? new Color(45, 45, 45) : new Color(255, 255, 255);
-        Color fgColor = darkMode ? Color.white : Color.black;
-        Color buttonBgColor = darkMode ? new Color(70, 70, 70) : new Color(220, 220, 220);
-        Color buttonFgColor = Color.BLACK; // Ensure text is visible
-    
-        frame.getContentPane().setBackground(bgColor);
-        table.setBackground(bgColor);
-        table.setForeground(fgColor);
-        
-        taskField.setBackground(bgColor);
-        taskField.setForeground(fgColor);
-        priorityField.setBackground(bgColor);
-        priorityField.setForeground(fgColor);
-        dueDateField.setBackground(bgColor);
-        dueDateField.setForeground(fgColor);
-        descriptionField.setBackground(bgColor);
-        descriptionField.setForeground(fgColor);
-        
-        filterDropdown.setBackground(bgColor); // Dark mode for filter dropdown
-        filterDropdown.setForeground(fgColor);
-        filterLabel.setForeground(fgColor); // Dark mode for filter label
-        
-        totalTasksLabel.setForeground(fgColor);
-        completedTasksLabel.setForeground(fgColor);
-    
-        darkModeButton.setBackground(buttonBgColor);
-        darkModeButton.setForeground(buttonFgColor);
-        addButton.setBackground(buttonBgColor);
-        addButton.setForeground(buttonFgColor);
-        deleteButton.setBackground(buttonBgColor);
-        deleteButton.setForeground(buttonFgColor);
-        completeButton.setBackground(buttonBgColor);
-        completeButton.setForeground(buttonFgColor);
-    }
-    
-       
-    
-    private void loadTasksFromDatabase() {
-        tableModel.setRowCount(0);
-        int totalTasks = 0, completedTasks = 0;
-        String selectedFilter = filterDropdown.getSelectedItem().toString();
-        String sql = "SELECT * FROM tasks";
-
-        if (selectedFilter.equals("Pending")) sql += " WHERE status='Pending'";
-        else if (selectedFilter.equals("Completed")) sql += " WHERE status='Completed'";
-        else if (selectedFilter.equals("High Priority")) sql += " WHERE priority='High'";
-
-        try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                Object[] row = {
-                        rs.getInt("id"),
-                        rs.getString("task"),
-                        rs.getString("priority"),
-                        rs.getString("due_date"),
-                        rs.getString("description"),
-                        rs.getString("status")
-                };
-                tableModel.addRow(row);
-                totalTasks++;
-                if (rs.getString("status").equals("Completed")) completedTasks++;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        if (darkMode) {
+            frame.getContentPane().setBackground(Color.DARK_GRAY);
+            table.setBackground(Color.DARK_GRAY);
+            table.setForeground(Color.WHITE);
+        } else {
+            frame.getContentPane().setBackground(Color.WHITE);
+            table.setBackground(Color.WHITE);
+            table.setForeground(Color.BLACK);
         }
-
-        totalTasksLabel.setText("Total Tasks: " + totalTasks);
-        completedTasksLabel.setText("Completed: " + completedTasks);
+        SwingUtilities.updateComponentTreeUI(frame);
     }
 
     public static void main(String[] args) {
